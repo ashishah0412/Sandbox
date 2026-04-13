@@ -102,6 +102,13 @@ resource "aws_networkfirewall_firewall_policy" "policy" {
       }
     }
 
+    dynamic "stateful_rule_group_reference" {
+      for_each = var.managed_rule_groups
+      content {
+        resource_arn = stateful_rule_group_reference.value.arn
+      }
+    }
+
     stateless_default_actions          = var.stateless_default_actions
     stateless_fragment_default_actions = var.stateless_fragment_default_actions
   }

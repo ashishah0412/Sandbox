@@ -435,6 +435,25 @@ network_firewall = {
     firewall_policy_name = "prod-firewall-policy"
     stateless_rule_groups = {}
     stateful_rule_groups = {}
+    
+    managed_rule_groups = {
+      "botnet-protection" = {
+        name     = "aws-managed-botnet-protection"
+        arn      = "arn:aws:wafv2:us-east-1::managed-rule-group/aws-managed-rules/AWSManagedRulesBotControlRuleGroup"
+        priority = 1
+      }
+      "malware-protection" = {
+        name     = "aws-managed-malware-protection"
+        arn      = "arn:aws:wafv2:us-east-1::managed-rule-group/aws-managed-rules/AWSManagedRulesMalwareProtectionRuleGroup"
+        priority = 2
+      }
+      "threat-signature" = {
+        name     = "aws-managed-threat-signature"
+        arn      = "arn:aws:wafv2:us-east-1::managed-rule-group/aws-managed-rules/AWSManagedRulesThreatSignatureRuleGroup"
+        priority = 3
+      }
+    }
+    
     enable_logging = true
     logging_destinations = []
   }

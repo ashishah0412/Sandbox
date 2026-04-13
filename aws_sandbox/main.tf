@@ -125,10 +125,11 @@ module "network_firewall" {
   vpc_id               = module.vpc[each.value.vpc_key].vpc_id
   firewall_name        = each.value.firewall_name
   firewall_policy_name = each.value.firewall_policy_name
-  firewall_subnet_ids  = module.subnets[each.value.subnet_key].subnet_ids
+  firewall_subnet_ids  = [module.subnets[each.value.subnet_key].subnet_ids["firewall-a"]]
 
   stateless_rule_groups  = each.value.stateless_rule_groups
   stateful_rule_groups   = each.value.stateful_rule_groups
+  managed_rule_groups    = try(each.value.managed_rule_groups, {})
 
   enable_logging       = each.value.enable_logging
   logging_destinations = each.value.logging_destinations

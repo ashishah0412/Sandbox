@@ -52,6 +52,18 @@ variable "stateful_rule_groups" {
 }
 
 ############################################
+# MANAGED RULE GROUPS (AWS Managed)
+############################################
+variable "managed_rule_groups" {
+  type = map(object({
+    name     = string
+    arn      = string
+    priority = number
+  }))
+  default = {}
+}
+
+############################################
 # FIREWALL POLICY SETTINGS
 ############################################
 variable "stateless_default_actions" {
