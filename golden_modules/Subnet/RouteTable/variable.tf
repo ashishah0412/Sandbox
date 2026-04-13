@@ -45,6 +45,16 @@ variable "route_tables" {
 }
 
 ############################################
+# GATEWAY REFERENCE MAPPINGS
+############################################
+
+variable "gateway_mappings" {
+  description = "Map of gateway reference names to actual AWS resource IDs"
+  type        = map(string)
+  default     = {}
+}
+
+############################################
 # GLOBAL TAGS
 ############################################
 

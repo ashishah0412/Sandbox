@@ -44,62 +44,6 @@ module "subnets" {
 }
 
 ###################################
-# ROUTE TABLES - GATEWAY ID RESOLUTION
-###################################
-locals {
-  # Map gateway references to actual AWS resource IDs
-  gateway_references = {
-    "igw-sandbox" = module.vpc["main"].igw_id
-    "local"       = "local"  # Special keyword, keep as-is
-    # Add VPC endpoint references here once network_firewall module is enabled
-    # "vpce-netfw"  = module.network_firewall["nfw-1"].firewall_endpoint_id
-  }
-
-  # Transform route_tables to resolve gateway_id references and subnet names to IDs
-  resolved_route_tables = {
-    for rt_key, rt_data in var.route_tables : rt_key => {
-      vpc_key    = rt_data.vpc_key
-      route_tables = {
-        for rt_name, rt in rt_data.route_tables : rt_name => {
-          name       = rt.name
-          # Resolve subnet names to actual subnet IDs from the subnets module
-          subnet_ids = [
-            for subnet_name in rt.subnet_ids :
-            module.subnets["subnet-set-1"].subnet_ids[subnet_name]
-          ]
-          routes = [
-            for route in rt.routes : {
-              cidr                    = try(route.cidr, null)
-              cidr_ipv6               = try(route.cidr_ipv6, null)
-              gateway_id              = try(contains(keys(local.gateway_references), route.gateway_id) ? local.gateway_references[route.gateway_id] : route.gateway_id, null)
-              nat_gateway_id          = try(route.nat_gateway_id, null)
-              transit_gateway_id      = try(route.transit_gateway_id, null)
-              vpc_peering_id          = try(route.vpc_peering_id, null)
-              egress_only_gateway_id  = try(route.egress_only_gateway_id, null)
-            }
-          ]
-          tags = try(rt.tags, {})
-        }
-      }
-    }
-  }
-}
-
-###################################
-# ROUTE TABLES
-###################################
-module "route_tables" {
-  source = "./../golden_modules/Subnet/RouteTable"
-
-  for_each = local.resolved_route_tables
-
-  vpc_id       = module.vpc[each.value.vpc_key].vpc_id
-  route_tables = each.value.route_tables
-
-  tags = var.tags
-}
-
-###################################
 # SECURITY GROUPS
 ###################################
 module "security_groups" {
@@ -137,6 +81,83 @@ module "network_firewall" {
   tags = var.tags
 }
 
+###################################
+# ROUTE TABLES - GATEWAY ID RESOLUTION
+###################################
+locals {
+  # Transform route_tables to resolve subnet names to IDs
+  resolved_route_tables = {
+    for rt_key, rt_data in var.route_tables : rt_key => {
+      vpc_key    = rt_data.vpc_key
+      route_tables = {
+        for rt_name, rt in rt_data.route_tables : rt_name => {
+          name       = rt.name
+          # Resolve subnet names to actual subnet IDs from the subnets module
+          subnet_ids = [
+            for subnet_name in rt.subnet_ids :
+            module.subnets["subnet-set-1"].subnet_ids[subnet_name]
+          ]
+          routes = [
+            for route in rt.routes : {
+              cidr                    = try(route.cidr, null)
+              cidr_ipv6               = try(route.cidr_ipv6, null)
+              # Keep gateway_id as-is (don't resolve here)
+              gateway_id              = try(route.gateway_id, null)
+              nat_gateway_id          = try(route.nat_gateway_id, null)
+              transit_gateway_id      = try(route.transit_gateway_id, null)
+              vpc_peering_id          = try(route.vpc_peering_id, null)
+              egress_only_gateway_id  = try(route.egress_only_gateway_id, null)
+            }
+          ]
+          tags = try(rt.tags, {})
+        }
+      }
+    }
+  }
+
+  # Gateway reference map for post-apply resolution
+  gateway_references = {
+    "igw-sandbox" = module.vpc["main"].igw_id
+    "local"       = "local"
+    "vpce-netfw"  = try(module.network_firewall["nfw-1"].firewall_endpoint_id, null)
+  }
+}
+
+###################################
+# ROUTE TABLES
+###################################
+module "route_tables" {
+  source = "./../golden_modules/Subnet/RouteTable"
+
+  for_each = local.resolved_route_tables
+
+  vpc_id       = module.vpc[each.value.vpc_key].vpc_id
+  route_tables = each.value.route_tables
+  
+  # Pass gateway reference mappings to be resolved at apply time
+  gateway_mappings = local.gateway_references
+
+  tags = var.tags
+
+  # Ensure network firewall is created first so vpce-netfw endpoint is available
+  depends_on = [module.network_firewall]
+}
+
+###################################
+# IGW EDGE ROUTE TABLE ASSOCIATION
+###################################
+
+# Associate edge route table with Internet Gateway (only if igw-edge-rt exists)
+resource "aws_route_table_association" "igw_edge" {
+  for_each = {
+    for rt_key, rt_data in local.resolved_route_tables :
+    rt_key => rt_data
+    if contains(keys(rt_data.route_tables), "igw-edge-rt")
+  }
+
+  gateway_id     = module.vpc[each.value.vpc_key].igw_id
+  route_table_id = module.route_tables[each.key].route_table_ids["igw-edge-rt"]
+}
 
 ###################################
 # BUDGETS

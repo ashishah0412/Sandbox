@@ -40,13 +40,31 @@ resource "aws_route" "routes" {
   destination_cidr_block     = try(each.value.route.cidr, null)
   destination_ipv6_cidr_block = try(each.value.route.cidr_ipv6, null)
 
-  # Handle gateway_id - if "local", use "local" directly
-  gateway_id             = try(each.value.route.gateway_id == "local" ? "local" : (each.value.route.gateway_id != null ? each.value.route.gateway_id : null), null)
+  # Resolve gateway_id references (igw-xxx, local, etc) through gateway_mappings
+  # If resolved to a vpce-xxx ID, use vpc_endpoint_id instead
+  gateway_id = try(
+    (each.value.route.gateway_id == "local" ? 
+      null : 
+      (contains(keys(var.gateway_mappings), each.value.route.gateway_id) ? 
+        (startswith(var.gateway_mappings[each.value.route.gateway_id], "vpce-") ? null : var.gateway_mappings[each.value.route.gateway_id]) :
+        (startswith(each.value.route.gateway_id, "vpce-") ? null : each.value.route.gateway_id)
+      )
+    ),
+    null
+  )
+  
+  vpc_endpoint_id = try(
+    (contains(keys(var.gateway_mappings), each.value.route.gateway_id) ?
+      (startswith(var.gateway_mappings[each.value.route.gateway_id], "vpce-") ? var.gateway_mappings[each.value.route.gateway_id] : null) :
+      (startswith(each.value.route.gateway_id, "vpce-") ? each.value.route.gateway_id : null)
+    ),
+    null
+  )
+  
   nat_gateway_id         = try(each.value.route.nat_gateway_id, null)
   transit_gateway_id     = try(each.value.route.transit_gateway_id, null)
   vpc_peering_connection_id = try(each.value.route.vpc_peering_id, null)
   egress_only_gateway_id = try(each.value.route.egress_only_gateway_id, null)
-  vpc_endpoint_id        = try(each.value.route.vpc_endpoint_id, null)
 }
 
 ############################################

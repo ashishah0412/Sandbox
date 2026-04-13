@@ -334,7 +334,7 @@ route_tables = {
             cidr = "10.10.0.0/25"
             gateway_id = "local"
           },
-          /*{
+          {
             cidr = "10.10.4.0/22"
             gateway_id = "vpce-netfw"
           },
@@ -345,7 +345,7 @@ route_tables = {
           {
             cidr = "0.0.0.0/0"
             gateway_id = "vpce-netfw"
-          },*/
+          },
         ]
       }
       "private-rt" = {
@@ -356,7 +356,7 @@ route_tables = {
             cidr = "10.10.4.0/22"
             gateway_id = "local"
           },
-          /*{
+          {
             cidr = "10.10.0.0/25"
             gateway_id = "vpce-netfw"
           },
@@ -367,7 +367,7 @@ route_tables = {
           {
             cidr = "0.0.0.0/0"
             gateway_id = "vpce-netfw"
-          },*/
+          },
         ]
       }
       "firewall-rt" = {
@@ -388,14 +388,14 @@ route_tables = {
         name = "rt-igw-edge"
         subnet_ids = []
         routes = [
-          /*{
+          {
             cidr = "10.10.0.0/25"
             gateway_id = "vpce-netfw"
           },
           {
             cidr = "10.10.4.0/22"
             gateway_id = "vpce-netfw"
-          },*/
+          },
         ]
       }
     }
@@ -435,24 +435,7 @@ network_firewall = {
     firewall_policy_name = "prod-firewall-policy"
     stateless_rule_groups = {}
     stateful_rule_groups = {}
-    
-    managed_rule_groups = {
-      "botnet-protection" = {
-        name     = "aws-managed-botnet-protection"
-        arn      = "arn:aws:wafv2:us-east-1::managed-rule-group/aws-managed-rules/AWSManagedRulesBotControlRuleGroup"
-        priority = 1
-      }
-      "malware-protection" = {
-        name     = "aws-managed-malware-protection"
-        arn      = "arn:aws:wafv2:us-east-1::managed-rule-group/aws-managed-rules/AWSManagedRulesMalwareProtectionRuleGroup"
-        priority = 2
-      }
-      "threat-signature" = {
-        name     = "aws-managed-threat-signature"
-        arn      = "arn:aws:wafv2:us-east-1::managed-rule-group/aws-managed-rules/AWSManagedRulesThreatSignatureRuleGroup"
-        priority = 3
-      }
-    }
+    managed_rule_groups = {}
     
     enable_logging = true
     logging_destinations = []
