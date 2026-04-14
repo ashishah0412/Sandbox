@@ -57,15 +57,16 @@ resource "aws_internet_gateway" "this" {
 ############################################
 # NAT Gateways (Optional)
 ############################################
-/*
 resource "aws_eip" "nat" {
-  count = var.enable_nat_gateway ? var.nat_gateway_count : 0
-  vpc   = true
+  count  = var.enable_nat_gateway ? var.nat_gateway_count : 0
+  domain = "vpc"
 
   tags = merge(
     { Name = "${var.name}-nat-eip-${count.index}" },
     var.tags
   )
+
+  depends_on = [aws_internet_gateway.this]
 }
 
 resource "aws_nat_gateway" "this" {
@@ -78,8 +79,76 @@ resource "aws_nat_gateway" "this" {
     { Name = "${var.name}-nat-${count.index}" },
     var.tags
   )
+
+  depends_on = [aws_internet_gateway.this]
 }
-*/
+
+############################################
+# VPC FLOW LOGS - CloudWatch Log Group
+############################################
+resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
+  count = var.enable_flow_logs && var.flow_logs_destination_type == "cloud-watch-logs" ? 1 : 0
+
+  name              = "/aws/vpc/flowlogs/${var.name}"
+  retention_in_days = var.flow_logs_retention
+
+  tags = merge(
+    { Name = "${var.name}-flow-logs" },
+    var.tags
+  )
+}
+
+############################################
+# VPC FLOW LOGS - IAM Role for CloudWatch
+############################################
+resource "aws_iam_role" "vpc_flow_logs_role" {
+  count = var.enable_flow_logs && var.flow_logs_destination_type == "cloud-watch-logs" ? 1 : 0
+
+  name = "vpc-flow-logs-role-${var.name}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "vpc-flow-logs.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = merge(
+    { Name = "vpc-flow-logs-role-${var.name}" },
+    var.tags
+  )
+}
+
+resource "aws_iam_role_policy" "vpc_flow_logs_policy" {
+  count = var.enable_flow_logs && var.flow_logs_destination_type == "cloud-watch-logs" ? 1 : 0
+
+  name = "vpc-flow-logs-policy-${var.name}"
+  role = aws_iam_role.vpc_flow_logs_role[0].id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogGroups",
+          "logs:DescribeLogStreams"
+        ]
+        Effect   = "Allow"
+        Resource = "arn:aws:logs:*:*:*"
+      }
+    ]
+  })
+}
+
 ############################################
 # VPC FLOW LOGS (S3 or CloudWatch)
 ############################################
@@ -98,7 +167,7 @@ resource "aws_flow_log" "this" {
 
   iam_role_arn = (
     var.flow_logs_destination_type == "cloud-watch-logs" ?
-    aws_iam_role.vpc_flow_logs[0].arn : null
+    aws_iam_role.vpc_flow_logs_role[0].arn : null
   )
 
   tags = merge(
@@ -107,54 +176,4 @@ resource "aws_flow_log" "this" {
   )
 }
 
-############################################
-# CloudWatch Log Group (If using CloudWatch)
-############################################
-resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
-  count = var.enable_flow_logs && var.flow_logs_destination_type == "cloud-watch-logs" ? 1 : 0
 
-  name              = "/aws/vpc/${var.name}-flow-logs"
-  retention_in_days = var.flow_logs_retention
-
-  tags = merge(
-    { Name = "${var.name}-flow-logs" },
-    var.tags
-  )
-}
-
-############################################
-# IAM Role for VPC Flow Logs (CloudWatch only)
-############################################
-resource "aws_iam_role" "vpc_flow_logs" {
-  count = var.enable_flow_logs && var.flow_logs_destination_type == "cloud-watch-logs" ? 1 : 0
-
-  name = "${var.name}-vpc-flow-logs-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Principal = { Service = "vpc-flow-logs.amazonaws.com" }
-      Action = "sts:AssumeRole"
-    }]
-  })
-}
-
-resource "aws_iam_role_policy" "vpc_flow_logs" {
-  count = var.enable_flow_logs && var.flow_logs_destination_type == "cloud-watch-logs" ? 1 : 0
-
-  name = "${var.name}-vpc-flow-logs-policy"
-  role = aws_iam_role.vpc_flow_logs[0].id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "logs:CreateLogStream",
-        "logs:PutLogEvents"
-      ]
-      Resource = "*"
-    }]
-  })
-}

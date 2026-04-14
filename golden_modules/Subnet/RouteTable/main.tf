@@ -61,7 +61,18 @@ resource "aws_route" "routes" {
     null
   )
   
-  nat_gateway_id         = try(each.value.route.nat_gateway_id, null)
+  # Resolve nat_gateway_id references through gateway_mappings
+  nat_gateway_id = try(
+    (each.value.route.nat_gateway_id != null ?
+      (contains(keys(var.gateway_mappings), each.value.route.nat_gateway_id) ?
+        var.gateway_mappings[each.value.route.nat_gateway_id] :
+        each.value.route.nat_gateway_id
+      ) :
+      null
+    ),
+    null
+  )
+  
   transit_gateway_id     = try(each.value.route.transit_gateway_id, null)
   vpc_peering_connection_id = try(each.value.route.vpc_peering_id, null)
   egress_only_gateway_id = try(each.value.route.egress_only_gateway_id, null)

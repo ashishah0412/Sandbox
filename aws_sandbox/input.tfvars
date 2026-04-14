@@ -10,7 +10,8 @@ vpc = {
     create_igw = true
     enable_dns_support = true
     enable_dns_hostnames = true
-    enable_nat_gateway = false
+    enable_nat_gateway = true
+    nat_gateway_subnet_key = "public-a"
     enable_flow_logs = true
     flow_logs_destination_type = "cloud-watch-logs"
     flow_logs_s3_bucket_arn = null
@@ -366,7 +367,7 @@ route_tables = {
           },
           {
             cidr = "0.0.0.0/0"
-            gateway_id = "vpce-netfw"
+            nat_gateway_id = "nat-sandbox-0"
           },
         ]
       }

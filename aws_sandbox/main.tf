@@ -12,9 +12,9 @@ module "vpc" {
   create_igw                 = each.value.create_igw
   enable_dns_support         = each.value.enable_dns_support
   enable_dns_hostnames       = each.value.enable_dns_hostnames
-  enable_nat_gateway         = coalesce(each.value.enable_nat_gateway, false)
-  nat_gateway_count          = try(each.value.nat_gateway_count,null)
-  nat_gateway_subnet_ids     = try(each.value.nat_gateway_subnet_ids,null)
+  enable_nat_gateway         = false
+  nat_gateway_count          = 0
+  nat_gateway_subnet_ids     = []
 
   enable_dhcp_options        = false
   dhcp_domain_name           = try(each.value.dhcp_domain_name,null)
@@ -82,6 +82,45 @@ module "network_firewall" {
 }
 
 ###################################
+# NAT GATEWAY (Created after subnets with actual subnet IDs)
+###################################
+resource "aws_eip" "nat" {
+  for_each = {
+    for vpc_key, vpc_config in var.vpc :
+    vpc_key => vpc_config
+    if coalesce(vpc_config.enable_nat_gateway, false)
+  }
+
+
+  domain = "vpc"
+
+  tags = merge(
+    { Name = "${each.value.name}-nat-eip-0" },
+    var.tags
+  )
+
+  depends_on = [module.vpc]
+}
+
+resource "aws_nat_gateway" "this" {
+  for_each = {
+    for vpc_key, vpc_config in var.vpc :
+    vpc_key => vpc_config
+    if coalesce(vpc_config.enable_nat_gateway, false)
+  }
+
+  allocation_id = aws_eip.nat[each.key].id
+  subnet_id     = module.subnets["subnet-set-1"].subnet_ids[each.value.nat_gateway_subnet_key]
+
+  tags = merge(
+    { Name = "${each.value.name}-nat-0" },
+    var.tags
+  )
+
+  depends_on = [module.subnets]
+}
+
+###################################
 # ROUTE TABLES - GATEWAY ID RESOLUTION
 ###################################
 locals {
@@ -117,9 +156,10 @@ locals {
 
   # Gateway reference map for post-apply resolution
   gateway_references = {
-    "igw-sandbox" = module.vpc["main"].igw_id
-    "local"       = "local"
-    "vpce-netfw"  = try(module.network_firewall["nfw-1"].firewall_endpoint_id, null)
+    "igw-sandbox"    = module.vpc["main"].igw_id
+    "local"          = "local"
+    "vpce-netfw"     = try(module.network_firewall["nfw-1"].firewall_endpoint_id, null)
+    "nat-sandbox-0"  = try(aws_nat_gateway.this["main"].id, null)
   }
 }
 
