@@ -345,7 +345,7 @@ route_tables = {
           },
           {
             cidr = "0.0.0.0/0"
-            gateway_id = "vpce-netfw"
+            gateway_id = "igw-sandbox"
           },
         ]
       }
@@ -389,10 +389,6 @@ route_tables = {
         name = "rt-igw-edge"
         subnet_ids = []
         routes = [
-          {
-            cidr = "10.10.0.0/25"
-            gateway_id = "vpce-netfw"
-          },
           {
             cidr = "10.10.4.0/22"
             gateway_id = "vpce-netfw"
