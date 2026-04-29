@@ -467,8 +467,27 @@ budgets = {
             comparison = "GREATER_THAN"
             notification_type = "ACTUAL"
             emails = ["kowsik.chowdhury@aon.com"]
+            #sns_arns = ["arn:aws:sns:us-east-1:261358761679:sandbox-budget-enforcement"]
+            sns_arns = []
           },
         ]
+
+        # Optional: at 95% ACTUAL, automatically apply this SCP to target OUs.
+        # Replace sample values before apply.
+        scp_action = {
+          policy_id           = "p-rneyh447"
+          target_ids          = ["ou-pu8b-wnujziax"]
+          execution_role_name = "budgets-scp-execution-role" # role must exist in the child account being deployed
+          # account_id is auto-resolved from the active AWS session — do not set
+          # threshold = 95
+          # threshold_type = "PERCENTAGE"
+          # notification_type = "ACTUAL"
+
+          # Optional explicit subscribers for the budget action. If omitted,
+          # subscribers are inherited from the 95% ACTUAL notification above.
+          # subscriber_emails = ["kowsik.chowdhury@aon.com"]
+          # subscriber_sns_arns = ["arn:aws:sns:us-east-1:261358761679:sandbox-budget-enforcement"]
+        }
       }
     }
   }
