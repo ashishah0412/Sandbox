@@ -2,6 +2,55 @@
 ############################################
 # AWS COST BUDGET (Dynamic)
 ############################################
+data "aws_caller_identity" "current" {}
+
+locals {
+  budgets_with_scp_action = {
+    for budget_key, budget_cfg in var.budgets : budget_key => budget_cfg
+    if try(budget_cfg.scp_action, null) != null
+  }
+
+  scp_action_subscribers = {
+    for budget_key, budget_cfg in local.budgets_with_scp_action : budget_key => concat(
+      [
+        for email in try(budget_cfg.scp_action.subscriber_emails, []) : {
+          address           = email
+          subscription_type = "EMAIL"
+        }
+      ],
+      [
+        for sns_arn in try(budget_cfg.scp_action.subscriber_sns_arns, []) : {
+          address           = sns_arn
+          subscription_type = "SNS"
+        }
+      ],
+      (
+        length(try(budget_cfg.scp_action.subscriber_emails, [])) == 0 &&
+        length(try(budget_cfg.scp_action.subscriber_sns_arns, [])) == 0
+      ) ? concat(
+        flatten([
+          for n in budget_cfg.notifications : [
+            for email in coalesce(try(n.emails, null), []) : {
+              address           = email
+              subscription_type = "EMAIL"
+            }
+            if n.threshold == 95 && n.threshold_type == "PERCENTAGE" && n.notification_type == "ACTUAL"
+          ]
+        ]),
+        flatten([
+          for n in budget_cfg.notifications : [
+            for sns_arn in coalesce(try(n.sns_arns, null), []) : {
+              address           = sns_arn
+              subscription_type = "SNS"
+            }
+            if n.threshold == 95 && n.threshold_type == "PERCENTAGE" && n.notification_type == "ACTUAL"
+          ]
+        ])
+      ) : []
+    )
+  }
+}
+
 resource "aws_budgets_budget" "this" {
   for_each = var.budgets
 
@@ -49,4 +98,50 @@ resource "aws_budgets_budget" "this" {
     var.tags,
     lookup(each.value, "tags", {})
   )
+}
+
+resource "aws_budgets_budget_action" "scp_95" {
+  for_each = local.budgets_with_scp_action
+
+  budget_name        = aws_budgets_budget.this[each.key].name
+  action_type        = "APPLY_SCP_POLICY"
+  approval_model     = "AUTOMATIC"
+  notification_type  = try(each.value.scp_action.notification_type, "ACTUAL")
+  # Role must be in the same account as the budget action. Always use current account ID.
+  execution_role_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${each.value.scp_action.execution_role_name}"
+  account_id         = data.aws_caller_identity.current.account_id
+
+  action_threshold {
+    action_threshold_type  = try(each.value.scp_action.threshold_type, "PERCENTAGE")
+    action_threshold_value = try(each.value.scp_action.threshold, 95)
+  }
+
+  definition {
+    scp_action_definition {
+      policy_id  = each.value.scp_action.policy_id
+      target_ids = each.value.scp_action.target_ids
+    }
+  }
+
+  dynamic "subscriber" {
+    for_each = local.scp_action_subscribers[each.key]
+
+    content {
+      address           = subscriber.value.address
+      subscription_type = subscriber.value.subscription_type
+    }
+  }
+
+  tags = merge(
+    { Name = "${each.value.name}-scp-action" },
+    var.tags,
+    lookup(each.value, "tags", {})
+  )
+
+  lifecycle {
+    precondition {
+      condition     = length(local.scp_action_subscribers[each.key]) > 0
+      error_message = "scp_action requires at least one subscriber. Provide scp_action subscriber_emails/subscriber_sns_arns or define subscribers in the 95% ACTUAL budget notification."
+    }
+  }
 }

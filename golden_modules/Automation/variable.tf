@@ -46,6 +46,21 @@ variable "budgets" {
       sns_arns          = optional(list(string))
     }))
 
+    # Optional: auto-apply SCP action when budget threshold is reached.
+    # If subscriber_emails/subscriber_sns_arns are omitted, subscribers are
+    # inherited from the 95% ACTUAL notification for the same budget.
+    scp_action = optional(object({
+      policy_id           = string
+      target_ids          = list(string)
+      execution_role_name = string           # Role name only — ARN is built from current account automatically
+      account_id          = optional(string)
+      threshold          = optional(number, 95)
+      threshold_type     = optional(string, "PERCENTAGE")
+      notification_type  = optional(string, "ACTUAL")
+      subscriber_emails  = optional(list(string), [])
+      subscriber_sns_arns = optional(list(string), [])
+    }))
+
     tags = optional(map(string))
   }))
 }
